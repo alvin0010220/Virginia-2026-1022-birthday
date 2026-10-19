@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#ffe3cf" />
-<title>🎂 昕耘 1022 生日快樂｜回憶拼圖 &amp; 貓咪小屋</title>
+<title>🎂 莊昕耘 2026.10.22 生日快樂｜回憶拼圖 &amp; 貓咪小屋</title>
 
 <!-- ★ 透過 CDN 引入 Phaser 3 與 canvas-confetti（需要網路） ★ -->
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
@@ -166,7 +166,7 @@
 <div id="app">
   <!-- 頂部導覽：隨時切換兩種模式 -->
   <header id="topbar">
-    <div class="brand">🎂 昕耘 1022</div>
+    <div class="brand">🎂 2026.10.22</div>
     <nav class="modes">
       <button class="mode-btn active" id="nav-quiz" disabled>🧩 回憶拼圖</button>
       <button class="mode-btn" id="nav-room" disabled>🐱 貓咪小屋</button>
@@ -182,7 +182,7 @@
       <div class="puzzle" id="puzzle"></div>
       <p class="hub-tip">找守門貓挑戰 4 條路線，集滿拼圖碎片 💗</p>
       <div class="guardians" id="guardians"></div>
-      <button class="mailbox" id="btn-mailbox" disabled>🔒 最終信箱</button>
+      <button class="mailbox" id="btn-mailbox" disabled>🔒 最終信件</button>
       <button class="linklike" id="btn-reset">重置答題進度</button>
     </section>
 
@@ -270,17 +270,17 @@ const ROOM_BG_DEFAULT = 1;
 
 // 【★換內容★ 最終告白長信】請把下面這段 HTML 換成你真正想說的話（可用 <p>、<h3>、<span class="frag">）
 const LETTER_HTML = `
-  <h3>親愛的昕耘：</h3>
+  <h3>親愛的寶寶大人：</h3>
   <p>生日快樂 🎂 如果妳看到這裡，代表四塊拼圖都被妳翻開了。</p>
-  <p><span class="frag">謝謝妳</span>謝謝妳從很久很久以前，就一直出現在我的故事裡。從最早的那一則訊息開始，一路走到現在，每一個平凡的日子，都因為有妳而變得不一樣。</p>
-  <p><span class="frag">沒有逃跑</span>謝謝妳在我還不夠成熟、還在慢慢調整的時候，從來沒有真的逃跑。妳的耐心與包容，讓我看見愛原來可以是這個樣子。</p>
-  <p><span class="frag">一起冒險</span>親密關係需要冒險。謝謝妳願意踏出那一步，和我一起承擔、一起享受這趟旅程。只要有妳在，沿途的風景就都很美。</p>
-  <p><span class="frag">1022 生日快樂</span>願我們都把上帝放在第一位，再一起好好愛彼此。我會繼續努力，成為更好的我，陪妳走過每一個明年、後年、很多很多年的 10 月 22 日。</p>
-  <p>（★這裡可以再補上只有你們才懂的話★）</p>
-  <p style="text-align:right">愛妳的 宇翔</p>
+  <p><span class="frag">謝謝妳</span>謝謝妳在很久以前就出現在我的世界中。從最早的那一則訊息開始，一直到我們恢復聯絡，再到現在，每一個平凡的日子，都因為有妳而變得特別。</p>
+  <p><span class="frag">與我一起冒險</span>「親密關係需要冒險。」謝謝妳願意踏出那一步，和我一起承擔、一起享受這趟旅程。只要有妳在，沿途都是美景。</p>
+  <p><span class="frag">一起在愛中成長</span>我們都知道自己不是完美的人，正因如此才有上帝在我們之間動工的空間，我們才能互相陪伴、互相成長，才能變得更像耶穌。</p>
+  <p><span class="frag">我愛你!生日快樂!</span>願我們都把上帝放在第一位，再一起好好愛彼此。我會繼續努力，成為更好的我，陪妳走過每一個明年、後年、很多很多年的 10 月 22 日。</p>
+  <p>我最愛的、神所愛的莊昕耘，這是我們交往後的第一個生日，我想你一開始看到卡片大概會覺得傻眼，啊不是好幾個晚上都在做卡片怎麼是現成的。我也是想了好一陣子才決定用這個大膽的做法，希望這個卡片你會喜歡。祝福妳的靈，願妳凡事興盛，身體健壯，正如你的靈魂興盛一樣。祝福妳時常感受到上帝的恩典一定夠妳用，也有耶穌的眼光看待自己及事物。祝福未來的我們，即使一定還有爭吵，但我們還是會選擇彼此相愛，願我們在耶穌的愛中一起扶持成長。我愛妳莊昕耘，恭喜妳27歲啦！</p>
+  <p style="text-align:right">最愛妳的 張宇翔 2026.10.22</p>
 `;
 // 【★換內容★ 實體禮物提示】信件最後的高亮提示（已照你的規格寫好）
-const FINAL_LINE = '10月22日，昕耘生日快樂！去打開妳右邊抽屜裡的實體禮物吧！';
+const FINAL_LINE = '請憑此兌換【隨意指定挑戰券】。使用須知：1.本券賦予壽星最高強制力，挑戰者不得以任何理由拖延或推託。2.挑戰內容由指定人隨意發揮，但以挑戰者肉身可達成、且不危害生命安全為限。3.一經填寫即刻啟動，逾期未達成任憑處置。4.使用期限:2027.10.22';
 
 const SAVE_KEY = 'yun1022_save_v1';   // 手機 localStorage 存檔（關掉網頁也不會丟進度）
 
@@ -375,16 +375,16 @@ const CAT_COLORS = { bed:'#e6b3c2', carrier:'#8a6a58', tree:'#c9a27e', window:'#
    -------------------------------------------------------------------------- */
 const ROUTES = [
   {
-    id: 1, title: '2014 的時光膠囊', short: '時光膠囊', cat: 'nunu', fragment: '謝謝妳', pos: ['0%', '0%'],
+    id: 1, title: '過去的點點滴滴', short: '時光膠囊', cat: 'nunu', fragment: '謝謝妳', pos: ['0%', '0%'],
     questions: [
       { q: '我們第一次用通訊軟體聊天是在什麼時候，用什麼通訊軟體？',
         options: ['2013 年 / LINE', '2014 年 / Messenger', '2012 年 / LINE', '2013 年 / Messenger'], answers: [3],
         explain: '這是我們故事的開端，那時沒有人知道未來會長這樣。', photoUrl: 'photo_q1_1.jpg' },
       { q: '下列哪件事是某個理工直男「沒有」做過的舉動？',
-        options: ['去花店選花送給妳', '做一份情人節考察行程問卷', '鉤織出一件毯子送給妳', '煮鮮奶麻糬黑糖水給妳喝'], answers: [2],
+        options: ['去花店選花送給妳', '做一份情人節考察行程問卷', '鉤織出一件花花毯子送給妳', '煮鮮奶麻糬黑糖水給妳喝'], answers: [2],
         explain: '雖然最後還是送成品給妳了。', photoUrl: 'photo_q1_2.jpg' },
       { q: '去年的自製一番賞抽獎裡，妳覺得哪一個獎品最能代表我的真心？',
-        options: ['Miffy 化妝鏡', 'Le Labo 香水小樣', '那幾張可以為所欲為的「隨意使喚券」', '一番賞本身就是真心'], answers: [0, 1, 2, 3],
+        options: ['Miffy 化妝鏡', 'Diptyque 香水小樣', '那幾張可以為所欲為的「隨意使喚券」', '一番賞本身就是真心'], answers: [0, 1, 2, 3],
         explain: '不管哪一個，妳抽到時開心的樣子就是最好的大獎。', photoUrl: 'photo_q1_3.jpg' },
       { q: '下列哪個選項你們「沒有」一起做過？',
         options: ['跑去動物園看企鵝', '去台北小巨蛋溜冰', '去湯姆熊打太鼓達人', '去安森跟花博野餐'], answers: [2],
@@ -392,7 +392,7 @@ const ROUTES = [
     ],
   },
   {
-    id: 2, title: '心跳漏拍的瞬間', short: '心跳漏拍', cat: 'mushroom', fragment: '沒有逃跑', pos: ['100%', '0%'],
+    id: 2, title: '心跳漏拍的瞬間', short: '心跳漏拍', cat: 'mushroom', fragment: '與我一起冒險', pos: ['100%', '0%'],
     questions: [
       { q: '去年 5 月 9 號新莊棒球場看球結束後，是什麼動作讓妳心裡冒出「他好像狗、好可愛」的念頭？',
         options: ['搶著幫妳提重物', '蹲在地上讓妳休息然後伸手牽妳', '幫妳把安全帽扣好', '一直眼巴巴望著妳不講話'], answers: [1],
@@ -401,7 +401,7 @@ const ROUTES = [
         options: ['拉麵吃不完', '妳竟然覺得對面的我長得挺好看', '發現自己錢包忘記帶', '不小心把湯汁噴到衣服上'], answers: [1],
         explain: '妳太擅長不動聲色，坐在對面的我什麼都沒發現。', photoUrl: 'photo_q2_2.jpg' },
       { q: '聖誕節前夕，有人獨自吃醋難過，後來妳送了一朵鉤織花給他，當時妳是怎麼安撫他的？',
-        options: ['說這朵花是特別找大師訂做的', '說買給他的比較貴，送別人的只是在捷運站剛好看到隨手買的', '答應下次單獨跟他去吃大餐', '說少爺那朵只是友情贊助'], answers: [1],
+        options: ['說這朵花是特別找大師訂做的', '說買給他的比較貴，送少爺的只是在捷運站剛好看到隨手買的', '答應下次單獨跟他去吃大餐', '說少爺那朵只是友情贊助'], answers: [1],
         explain: '某人那天收完花，整個人瞬間原地滿血復活。', photoUrl: 'photo_q2_3.jpg' },
       { q: '每次在妳覺得變胖、外貌沒自信時，某個小狗在妳身邊扮演的最稱職角色是？',
         options: ['嚴格控管卡路里的教練', '不管怎樣都真誠誇獎妳的「全肯定機器人」', '默默把食物吃光的廚餘桶', '假裝沒看見的木頭人'], answers: [1],
@@ -409,11 +409,11 @@ const ROUTES = [
     ],
   },
   {
-    id: 3, title: '在真理中對焦', short: '真理對焦', cat: 'yangyang', fragment: '一起冒險', pos: ['0%', '100%'],
+    id: 3, title: '在真理中對焦', short: '真理對焦', cat: 'yangyang', fragment: '一起在愛中成長', pos: ['0%', '100%'],
     questions: [
       { q: '下面哪一句話讓妳在猶豫退縮時，願意勇敢邁出步伐？',
         options: ['盡情地享受過程', '親密關係需要冒險', '愛是恆久忍耐，又有恩慈', '萬事都互相效力，叫愛神的人得益處'], answers: [1],
-        explain: '謝謝妳願意踏出這一步，和我一起承擔這份冒險。', photoUrl: 'photo_q3_1.jpg' },
+        explain: '謝謝妳願意踏出這一步，和我一起享受這個冒險。', photoUrl: 'photo_q3_1.jpg' },
       { q: '從不知何時開始，我們建立起每週六固定的相處模式，通常在小組結束後我們會一起做什麼，直到不得不去趕末班火車？',
         options: ['在三號公園坐著聊天', '陪妳搭捷運回永安市場，在站外聊到最後一刻', '一起去吃晚餐', '以上皆是'], answers: [3],
         explain: '每個趕火車的週末夜晚，都是我一個禮拜裡最珍惜的充電時光。', photoUrl: 'photo_q3_2.jpg' },
@@ -426,7 +426,7 @@ const ROUTES = [
     ],
   },
   {
-    id: 4, title: '現在與未來', short: '現在與未來', cat: 'cat', fragment: '1022生日快樂', pos: ['100%', '100%'],
+    id: 4, title: '現在與未來', short: '現在與未來', cat: 'cat', fragment: '我愛你!生日快樂!', pos: ['100%', '100%'],
     questions: [
       { q: '8 月 2 號告白的最後，我對妳說出的告白詞是？',
         options: ['妳願意把下半輩子交給我嗎？', '金說一定要享受旅程，而我想說：我想跟妳一起享受旅程，妳願意跟我交往嗎？', '妳是我見過最特別的女孩，跟我交往吧！', '我們已經認識十二年了，希望以後每年都有妳在身邊，妳願意跟我交往嗎？'], answers: [1],
@@ -444,7 +444,7 @@ const ROUTES = [
   },
 ];
 // 路線四 Q4-4 陷阱的提示文字（第 1、2 次選「海扁他」；第 3 次直接 Bad End）
-const TRAP_MSGS = ['再想一下喔🥺', '真的要扁我嗎？最後一次機會喔！'];
+const TRAP_MSGS = ['再想一下吧🥺', '真的要扁我嗎？最後一次機會喔！'];
 
 /* ==========================================================================
    存檔
@@ -1000,8 +1000,8 @@ function renderHub(flipIndex){
   // --- 最終信箱 ---
   const mb = $('btn-mailbox'), all = n === 4;
   mb.disabled = !all; mb.classList.toggle('ready', all);
-  mb.textContent = all ? '💌 打開最終信箱' : '🔒 最終信箱（集滿 4 塊拼圖）';
-  if(flipIndex !== undefined && all) setTimeout(() => { celebrate(); showDialog('🎉 四塊拼圖集滿了！\n去點「最終信箱」吧 💌'); }, 1700);
+  mb.textContent = all ? '💌 打開最終信件' : '🔒 最終信件（集滿 4 塊拼圖）';
+  if(flipIndex !== undefined && all) setTimeout(() => { celebrate(); showDialog('🎉 四塊拼圖集滿了！\n去點「最終信件」吧 💌'); }, 1700);
 }
 
 $('btn-mailbox').onclick = () => {
