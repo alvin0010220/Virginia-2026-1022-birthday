@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#ffe3cf" />
+<title>🎂 昕耘 1022 生日快樂｜回憶拼圖 &amp; 貓咪小屋</title>
+
+<!-- ★ 透過 CDN 引入 Phaser 3 與 canvas-confetti（需要網路） ★ -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+<style>
+  :root{
+    --cream:#fff7ef; --peach:#ffe3cf; --pink:#ff8fa3; --rose:#e0607e; --rose-dark:#c4486a;
+    --brown:#5b3f35; --mint:#8fcfb2; --gold:#f6c667; --ink:#4a3a40; --muted:#8e7a80;
+    --card:#ffffffee; --shadow:0 8px 22px rgba(120,70,60,.16);
+    /* 拼圖用的合照路徑由 JS 依 CONFIG 設定（見下方 COUPLE_PHOTO） */
+    --couple-img:none;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    color:var(--ink);background:linear-gradient(165deg,var(--cream),var(--peach));}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;height:100%}
+  @supports(height:100dvh){#app{height:100dvh}}
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none!important}
+
+  /* ===== 頂部導覽 ===== */
+  #topbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:calc(8px + env(safe-area-inset-top)) 10px 8px;background:#ffffffe8;
+    border-bottom:2px solid #ffc9b5;box-shadow:0 2px 10px rgba(0,0,0,.05);z-index:20}
+  .brand{font-weight:800;font-size:.95rem;color:var(--rose-dark);white-space:nowrap}
+  .modes{display:flex;gap:4px;background:#f7e8dc;padding:3px;border-radius:999px}
+  .mode-btn{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:.78rem;padding:7px 11px;border-radius:999px;white-space:nowrap}
+  .mode-btn.active{background:linear-gradient(135deg,#ff9fb3,#ff7f9b);color:#fff;box-shadow:0 3px 8px rgba(224,96,126,.35)}
+  .mode-btn:disabled{opacity:.5}
+
+  /* ===== 舞台：Phaser 畫布 + DOM 覆蓋層 ===== */
+  #stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}
+  #game-root{position:absolute;inset:0;z-index:5;pointer-events:none}   /* 畫布疊在 DOM 上方；模式二時 JS 會開啟 pointer-events */
+  #game-root canvas{display:block;touch-action:none}
+  .overlay{position:absolute;inset:0;z-index:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px calc(18px + env(safe-area-inset-bottom))}
+
+  /* ===== 主畫面 Hub ===== */
+  .hub-title{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 8px}
+  .hub-title b{font-size:1.05rem;color:var(--rose-dark)}
+  .hub-title span{font-weight:800;background:#fff;border-radius:999px;padding:3px 12px;font-size:.85rem;box-shadow:var(--shadow)}
+  .puzzle{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:0 auto 10px;
+    width:min(62vw,27vh,270px);padding:6px;background:#fff;border-radius:14px;box-shadow:var(--shadow);transform:rotate(-1deg)}
+  .pcard{perspective:700px;aspect-ratio:448/597;cursor:default}
+  .pinner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform 1s cubic-bezier(.3,1.3,.5,1)}
+  .pcard.flipped .pinner{transform:rotateY(180deg)}
+  .pface{position:absolute;inset:0;border-radius:8px;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-direction:column}
+  .pfront{background:repeating-linear-gradient(45deg,#d9d4d6,#d9d4d6 8px,#cfc9cb 8px,#cfc9cb 16px);color:#8b8588}
+  .pfront .lock{font-size:1.8rem;filter:grayscale(1)}
+  .pfront small{font-size:.68rem;margin-top:2px;font-weight:700}
+  /* ★ 切割同一張合照：background-size 200% + background-position 取四分之一 */
+  .pback{transform:rotateY(180deg);
+    background-image:var(--couple-img),linear-gradient(135deg,#ffd0dc,#ffe9c7);
+    background-size:200% 200%,100% 100%;
+    background-position:var(--px) var(--py),center;background-repeat:no-repeat}
+  .pword{position:absolute;left:0;right:0;bottom:0;padding:14px 2px 5px;text-align:center;font-weight:900;font-size:clamp(.72rem,3.1vw,.95rem);
+    color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.65);background:linear-gradient(transparent,rgba(0,0,0,.45))}
+  .hub-tip{text-align:center;font-size:.8rem;color:var(--muted);margin:0 0 8px}
+  .guardians{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .guardian{position:relative;border:0;background:var(--card);border-radius:16px;padding:6px 4px 8px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink);transition:transform .15s}
+  .guardian:active{transform:scale(.96)}
+  .gslot{width:100%;aspect-ratio:1/1;border-radius:12px;background:radial-gradient(circle at 50% 80%,#ffe9dc,#fff4ec)}
+  .gtag{font-size:.62rem;color:var(--muted);font-weight:700}
+  .gname{font-size:.72rem;font-weight:800;line-height:1.2;text-align:center;min-height:2.4em;display:flex;align-items:center}
+  .gstate{font-size:.7rem;font-weight:800;color:#fff;background:var(--rose);border-radius:999px;padding:2px 9px}
+  .guardian.done .gstate{background:var(--mint);color:#245;}
+  .guardian.done{background:#f1fff8}
+  .hearts{position:absolute;inset:0;pointer-events:none;display:none}
+  .guardian.done .hearts{display:block}
+  .hearts i{position:absolute;bottom:45%;font-style:normal;font-size:1rem;opacity:0;animation:floatUp 2.6s ease-in infinite}
+  .hearts i:nth-child(1){left:22%}.hearts i:nth-child(2){left:48%;animation-delay:.9s}.hearts i:nth-child(3){left:68%;animation-delay:1.7s}
+  @keyframes floatUp{0%{transform:translateY(8px) scale(.6);opacity:0}20%{opacity:1}100%{transform:translateY(-44px) scale(1.15);opacity:0}}
+  .mailbox{display:block;margin:14px auto 4px;border:0;border-radius:999px;padding:13px 30px;font-size:1rem;font-weight:900;color:#fff;
+    background:linear-gradient(135deg,#ff9fb3,#ff6f93);box-shadow:0 6px 16px rgba(224,96,126,.4)}
+  .mailbox:disabled{background:#cfc7c9;box-shadow:none;color:#fff}
+  .mailbox.ready{animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+  .linklike{display:block;margin:6px auto 0;border:0;background:none;color:var(--muted);font-size:.72rem;text-decoration:underline}
+
+  /* ===== 答題 Quiz ===== */
+  .q-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .q-back{border:0;background:#fff;border-radius:999px;width:36px;height:36px;font-size:1rem;box-shadow:var(--shadow)}
+  .q-title{flex:1;font-weight:800;color:var(--rose-dark);font-size:.95rem}
+  .q-dots{display:flex;gap:5px}
+  .q-dots i{width:10px;height:10px;border-radius:50%;background:#e6d8d2}
+  .q-dots i.on{background:var(--pink)} .q-dots i.cur{background:var(--rose);transform:scale(1.3)}
+  .q-catslot{height:min(25vh,190px);min-height:116px;margin:2px 0;border-radius:18px;background:radial-gradient(ellipse at 50% 85%,#ffd9c7 0%,#fff3ea 70%)}
+  .q-card{background:var(--card);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);margin-top:6px;position:relative}
+  .q-card::before{content:"";position:absolute;left:50%;top:-8px;width:16px;height:16px;background:var(--card);transform:translateX(-50%) rotate(45deg);border-radius:3px}
+  .q-no{font-size:.72rem;font-weight:800;color:var(--rose);margin-bottom:4px}
+  .q-text{font-size:1rem;font-weight:700;line-height:1.5}
+  .q-hint{min-height:1.6em;text-align:center;font-weight:800;color:var(--rose-dark);margin:8px 0 2px;font-size:.9rem}
+  .q-options{display:flex;flex-direction:column;gap:9px}
+  .opt{border:2px solid #ffd2c2;background:#fff;border-radius:14px;padding:12px 14px;text-align:left;font-size:.93rem;font-weight:600;color:var(--ink);line-height:1.45;box-shadow:0 3px 8px rgba(120,70,60,.08);transition:background .15s,transform .1s}
+  .opt:active{transform:scale(.985)}
+  .opt b{color:var(--rose);margin-right:6px}
+  .opt.right{background:#e6fbef;border-color:#58c58f}
+  .opt.wrong{background:#eee;color:#aaa;border-color:#ddd}
+  .opt:disabled{cursor:default}
+  .shake{animation:shake .5s}
+  @keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-9px)}30%{transform:translateX(8px)}45%{transform:translateX(-6px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+
+  /* ===== 彈窗 ===== */
+  .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(60,30,40,.55);backdrop-filter:blur(3px)}
+  .polaroid{width:min(86vw,340px);background:#fff;padding:12px 12px 16px;border-radius:6px;box-shadow:0 14px 40px rgba(0,0,0,.4);transform:rotate(-2deg);animation:pop .5s cubic-bezier(.3,1.4,.5,1);position:relative;max-height:94%;display:flex;flex-direction:column}
+  .polaroid::before{content:"";position:absolute;top:-11px;left:50%;width:84px;height:22px;transform:translateX(-50%) rotate(3deg);background:rgba(255,226,150,.85)}
+  @keyframes pop{from{transform:scale(.55) rotate(-9deg);opacity:0}to{transform:scale(1) rotate(-2deg);opacity:1}}
+  .pol-photo{position:relative;width:100%;aspect-ratio:1/1;background:#f4e8e0;overflow:hidden;flex:0 0 auto}
+  .pol-photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .pol-fb{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:2.4rem;
+    background:linear-gradient(135deg,#ffd0dc,#ffe9c7);color:#b86;text-align:center}
+  .pol-fb small{font-size:.72rem;font-weight:700;color:#a76}
+  .pol-photo.nophoto img{display:none}.pol-photo.nophoto .pol-fb{display:flex}
+  .pol-text{font-size:.95rem;line-height:1.6;font-weight:700;margin:12px 4px 12px;text-align:center;color:#5a4048;overflow:auto}
+  .btn{display:block;margin:0 auto;border:0;border-radius:999px;padding:11px 28px;font-size:.95rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#ff9fb3,#ff6f93);box-shadow:0 5px 12px rgba(224,96,126,.35)}
+  .btn.ghost{background:#fff;color:var(--rose-dark);box-shadow:inset 0 0 0 2px #ffc3d0}
+  .dialog{width:min(84vw,320px);background:#fff;border-radius:20px;padding:22px 20px 18px;text-align:center;box-shadow:0 14px 40px rgba(0,0,0,.35);animation:pop2 .3s}
+  @keyframes pop2{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+  .dialog p{white-space:pre-line;font-size:1.05rem;font-weight:800;line-height:1.6;margin:0 0 16px}
+  .frag-word{font-size:2rem;font-weight:900;color:var(--rose);margin:6px 0 14px;letter-spacing:2px}
+  .letter{width:min(92vw,420px);max-height:90%;display:flex;flex-direction:column;background:#fffaf2;border-radius:16px;padding:18px 16px 14px;box-shadow:0 14px 40px rgba(0,0,0,.4);animation:pop2 .4s;
+    background-image:repeating-linear-gradient(transparent,transparent 31px,#f3e3d4 32px)}
+  .letter-body{overflow-y:auto;-webkit-overflow-scrolling:touch;line-height:32px;font-size:.95rem;padding-right:4px}
+  .letter-body h3{margin:0 0 6px;color:var(--rose-dark);font-size:1.1rem;line-height:32px}
+  .letter-body p{margin:0 0 10px}
+  .letter-body .frag{display:inline-block;background:#ffe0e8;color:var(--rose-dark);font-weight:900;border-radius:6px;padding:0 8px;line-height:24px;margin-right:4px}
+  .gift{margin:10px 0 6px;padding:12px;border-radius:12px;background:linear-gradient(135deg,#fff0b8,#ffd6e0);font-weight:900;text-align:center;line-height:1.6;color:#b0304f;border:2px dashed #ff8fa3}
+  .letter-actions{display:flex;gap:10px;justify-content:center;margin-top:10px}
+  #badend{position:fixed;inset:0;z-index:80;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px;text-align:center}
+  #badend h1{font-size:clamp(1.6rem,8vw,2.6rem);line-height:1.5;margin:0;font-weight:900;animation:pop2 1.2s}
+  #loading{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(165deg,var(--cream),var(--peach));font-weight:800;color:var(--rose-dark)}
+  #loading .bar{width:200px;height:10px;border-radius:99px;background:#fff;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.15)}
+  #loading .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff9fb3,#ff6f93);transition:width .15s}
+
+  /* 拼圖集滿後：四塊合成一張完整照片（無縫） */
+  .puzzle{position:relative}
+  .puzzle .pcard,.puzzle .pface{transition:border-radius .6s}
+  .puzzle.complete{gap:0;padding:6px;transform:rotate(0deg);transition:transform .8s}
+  .puzzle.complete .pface{border-radius:0}
+  .puzzle .pfull{position:absolute;left:6px;right:6px;top:6px;bottom:6px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity 1.1s;
+    background-image:var(--couple-img),linear-gradient(135deg,#ffd0dc,#ffe9c7);background-size:100% 100%,100% 100%;background-repeat:no-repeat}
+  .puzzle.complete .pfull{opacity:1}
+  /* 房間挑選（底部抽屜，上方可即時預覽房間） */
+  .bgsheet{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.2);padding:10px 10px calc(12px + env(safe-area-inset-bottom))}
+  .bgs-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .bgs-head b{flex:1;color:var(--rose-dark)}
+  .bgs-head span{font-weight:800;font-size:.85rem;color:var(--muted)}
+  .bgs-head .btn{margin:0;padding:7px 18px;font-size:.85rem}
+  .bgs-strip{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px 2px 6px;touch-action:pan-x}
+  .bgs-thumb{flex:0 0 auto;width:60px;aspect-ratio:180/320;border-radius:8px;border:3px solid transparent;position:relative;overflow:hidden;background:#d9e8ea;padding:0}
+  .bgs-thumb img{width:100%;height:100%;display:block;object-fit:cover;image-rendering:pixelated}
+  .bgs-thumb i{position:absolute;left:3px;bottom:2px;font-style:normal;font-size:.7rem;font-weight:900;color:#fff;text-shadow:0 1px 3px #000}
+  .bgs-thumb.on{border-color:var(--rose);box-shadow:0 0 0 2px #ffc3d0}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 頂部導覽：隨時切換兩種模式 -->
+  <header id="topbar">
+    <div class="brand">🎂 昕耘 1022</div>
+    <nav class="modes">
+      <button class="mode-btn active" id="nav-quiz" disabled>🧩 回憶拼圖</button>
+      <button class="mode-btn" id="nav-room" disabled>🐱 貓咪小屋</button>
+    </nav>
+  </header>
+
+  <main id="stage">
+    <div id="game-root"></div>
+
+    <!-- 模式一：主畫面 Hub -->
+    <section id="hub" class="overlay hidden">
+      <div class="hub-title"><b>✨ 回憶拼圖</b><span id="hub-progress">0 / 4</span></div>
+      <div class="puzzle" id="puzzle"></div>
+      <p class="hub-tip">找守門貓挑戰 4 條路線，集滿拼圖碎片 💗</p>
+      <div class="guardians" id="guardians"></div>
+      <button class="mailbox" id="btn-mailbox" disabled>🔒 最終信箱</button>
+      <button class="linklike" id="btn-reset">重置答題進度</button>
+    </section>
+
+    <!-- 模式一：答題畫面 Quiz（貓咪由 Phaser 畫在 #q-catslot 的位置） -->
+    <section id="quiz" class="overlay hidden">
+      <div class="q-head">
+        <button class="q-back" id="q-back" aria-label="返回">←</button>
+        <div class="q-title" id="q-title"></div>
+        <div class="q-dots" id="q-dots"></div>
+      </div>
+      <div class="q-catslot" id="q-catslot"></div>
+      <div class="q-card"><div class="q-no" id="q-no"></div><div class="q-text" id="q-text"></div></div>
+      <div class="q-hint" id="q-hint"></div>
+      <div class="q-options" id="q-options"></div>
+    </section>
+
+    <div id="loading"><div>🐾 貓咪們正在集合中…</div><div class="bar"><i id="load-bar"></i></div></div>
+  </main>
+</div>
+
+<!-- 房間挑選抽屜（模式二） -->
+<div class="bgsheet hidden" id="bgsheet">
+  <div class="bgs-head"><b>🖼 選擇房間</b><span id="bgs-name"></span><button class="btn" id="bgs-done">完成</button></div>
+  <div class="bgs-strip" id="bgs-strip"></div>
+</div>
+
+<!-- 拍立得回憶小卡 -->
+<div class="modal hidden" id="m-polaroid">
+  <div class="polaroid">
+    <div class="pol-photo" id="pol-photo">
+      <img id="pol-img" alt="回憶照片" />
+      <div class="pol-fb">💗<small id="pol-fb-name">photo.jpg</small></div>
+    </div>
+    <p class="pol-text" id="pol-text"></p>
+    <button class="btn" id="pol-next">下一題</button>
+  </div>
+</div>
+
+<!-- 一般提示小視窗 -->
+<div class="modal hidden" id="m-dialog">
+  <div class="dialog"><p id="dlg-text"></p><button class="btn" id="dlg-ok">好</button></div>
+</div>
+
+<!-- 獲得碎片 -->
+<div class="modal hidden" id="m-frag">
+  <div class="dialog"><p>🧩 路線通關！<br>獲得拼圖碎片</p><div class="frag-word" id="frag-word"></div><button class="btn" id="frag-ok">去翻拼圖 ✨</button></div>
+</div>
+
+<!-- 最終告白長信 -->
+<div class="modal hidden" id="m-letter">
+  <div class="letter">
+    <div class="letter-body" id="letter-body"></div>
+    <div class="letter-actions">
+      <button class="btn ghost" id="letter-again">🎊 再放一次</button>
+      <button class="btn" id="letter-close">收進口袋</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bad End -->
+<div id="badend" class="hidden"><h1>去海扁他吧⋯⋯🥺</h1><button class="btn" id="badend-retry">重新挑戰</button></div>
+
+<script>
+/* ==========================================================================
+   ★★★ 設定區 CONFIG（要換素材、換信件內容，請先看這一區）★★★
+   ========================================================================== */
+
+// 【★請確認★ 素材資料夾路徑】
+// 目前假設「index.html」與你 zip 裡的所有 png / jpg 放在同一個資料夾（'./'）。
+// 若你把素材放進 assets/ 資料夾，請改成 'assets/'（注意結尾要有斜線）。
+const ASSET_PATH = './';
+
+// 【★請確認★ 每一格 Sprite 影格尺寸】ToffeeCraft 貓咪每格 32x32
+const FRAME_W = 32;
+const FRAME_H = 32;
+
+// 【★換圖★ 拼圖用的合照】會被 CSS background-position 切成 2x2 四塊
+const COUPLE_PHOTO = 'couple_photo.jpg';
+
+// 【★換圖★ 模式二房間背景】1.png ~ 25.png（180x320）都是空房間底圖。
+//   （共 25 張：1~25.png）想用單一張 room_bg.png 的話，把 ROOM_BG_FILE 改成 () => 'room_bg.png' 並把 ROOM_BG_COUNT 設為 1。
+const ROOM_BG_COUNT = 25;
+const ROOM_BG_FILE = (n) => `${n}.png`;
+const ROOM_BG_DEFAULT = 1;
+
+// 【★換內容★ 最終告白長信】請把下面這段 HTML 換成你真正想說的話（可用 <p>、<h3>、<span class="frag">）
+const LETTER_HTML = `
+  <h3>親愛的昕耘：</h3>
+  <p>生日快樂 🎂 如果妳看到這裡，代表四塊拼圖都被妳翻開了。</p>
+  <p><span class="frag">謝謝妳</span>謝謝妳從很久很久以前，就一直出現在我的故事裡。從最早的那一則訊息開始，一路走到現在，每一個平凡的日子，都因為有妳而變得不一樣。</p>
+  <p><span class="frag">沒有逃跑</span>謝謝妳在我還不夠成熟、還在慢慢調整的時候，從來沒有真的逃跑。妳的耐心與包容，讓我看見愛原來可以是這個樣子。</p>
+  <p><span class="frag">一起冒險</span>親密關係需要冒險。謝謝妳願意踏出那一步，和我一起承擔、一起享受這趟旅程。只要有妳在，沿途的風景就都很美。</p>
+  <p><span class="frag">1022 生日快樂</span>願我們都把上帝放在第一位，再一起好好愛彼此。我會繼續努力，成為更好的我，陪妳走過每一個明年、後年、很多很多年的 10 月 22 日。</p>
+  <p>（★這裡可以再補上只有你們才懂的話★）</p>
+  <p style="text-align:right">愛妳的 宇翔</p>
+`;
+// 【★換內容★ 實體禮物提示】信件最後的高亮提示（已照你的規格寫好）
+const FINAL_LINE = '10月22日，昕耘生日快樂！去打開妳右邊抽屜裡的實體禮物吧！';
+
+const SAVE_KEY = 'yun1022_save_v1';   // 手機 localStorage 存檔（關掉網頁也不會丟進度）
+
+/* --------------------------------------------------------------------------
+   貓咪素材對照表
+   你的素材是「已經裁好的單排橫條」，每個動作一張圖、影格 32x32：
+     Idle 7 格 / Run 7 格 / Jump 13 格 / Hurt 7 格 / Sleep 3 格
+   所以每個動作各自 load.spritesheet（見 BootScene.preload），再用 anims.create 組成動畫。
+   ★ 如果日後你改用「單張 cat_sheet.png 合集」，請看 BootScene.preload 內被註解的範例。
+   -------------------------------------------------------------------------- */
+const CATS = {
+  //  key:      { name, fallbackHue, files: 各動作的檔名 }   ← ★換圖★ 檔名不同請在此修改
+  cat:      { name:'守門貓',  hue: 28,  glyph:'貓', files:{ idle:'IdleCattt.png', walk:'RunCattt.png', jump:'JumpCatttt.png', hurt:'HurtCatttt.png', sleep:'SleepCattt.png' } },
+  nunu:     { name:'努努',    hue: 200, glyph:'努', files:{ idle:'NunuIdleCatt.png', walk:'NunuRunCatt.png', jump:'NunuJumpCattt.png', hurt:'NunuHurtCattt.png', sleep:'NunuSleepCatt.png' } },
+  mushroom: { name:'蘑菇',    hue: 340, glyph:'蘑', files:{ idle:'mushroomIdleCatt.png', walk:'mushroomRunCatt.png', jump:'mushroomJumpCattt.png', hurt:'mushroomHurtCattt.png', sleep:'mushroomSleepCatt.png' } },
+  yangyang: { name:'秧秧',    hue: 100, glyph:'秧', files:{ idle:'YangyangIdleCattt.png', walk:'YangyangRunCattt.png', jump:'YangyangJumpCatttt.png', hurt:'YangyangHurtCatttt.png', sleep:'YangyangSleepCattt.png' } },
+};
+// 【★改影格數★】frames = 該動作的影格數；rate = 每秒幾格；repeat = -1 無限循環 / 0 播一次
+const ANIM_DEF = {
+  idle:  { frames: 7,  rate: 6,  repeat: -1 },
+  walk:  { frames: 7,  rate: 10, repeat: -1 },
+  jump:  { frames: 13, rate: 14, repeat: 0  },
+  hurt:  { frames: 7,  rate: 7,  repeat: 0  },   // 7 格 / 7fps = 剛好 1 秒
+  sleep: { frames: 3,  rate: 2,  repeat: -1 },
+};
+
+/* --------------------------------------------------------------------------
+   模式二：傢俱清單（★換圖★ 檔名、切割範圍都可在這裡調整）
+   ROOM_IMAGES / ROOM_SHEETS = 單張圖 / 切格圖；ATLAS_RECTS = 大圖集裁切位置 [x,y,w,h]
+   ITEMS 的 k = 預設顯示大小（玩家在遊戲內還能用 ➖➕ 或雙指縮放）
+   -------------------------------------------------------------------------- */
+const FURN_ATLAS = 'Furnitures_Playgrounds_Toys.png';   // ★換圖★ 家具大圖集（窗戶/相框/燈/碗/玩具/盆栽/地毯…都在這張）
+// 大圖集內各家具的位置 [x, y, w, h]（已幫你量好）
+const ATLAS_RECTS = {
+  curtain: [[527,16,67,67],[623,16,67,67],[719,16,67,67],[815,16,67,67],[527,112,67,67],[623,112,67,67],[719,112,67,67],[815,112,67,67]],
+  grid: [[200,194,52,60],[264,194,52,60],[326,194,52,60],[200,258,52,60],[263,258,52,60],[326,258,52,60]],
+  frame: [[902,5,20,22],[933,5,20,22],[967,4,20,22],[902,38,20,22],[933,38,20,22],[967,37,20,22],[903,70,19,23],[936,70,19,23],[903,102,19,23],[936,102,19,23],[896,129,80,26],[896,162,78,25]],
+  plant: [[835,323,26,61],[868,323,26,61],[899,323,26,61],[932,323,26,61],[836,387,26,61],[867,387,26,61],[900,387,26,61],[965,323,23,29],[996,323,23,29],[965,355,23,29],[996,355,23,29],[965,387,23,29],[996,387,23,29]],
+  bowl: [[9,367,43,37],[74,367,43,37],[138,367,43,37],[203,367,43,37],[266,367,43,37],[331,367,43,37],[8,432,43,37],[73,432,43,37],[137,432,43,37],[202,432,43,37],[265,432,43,37],[330,432,43,37]],
+  ceil: [[398,992,36,42],[462,992,36,42],[526,992,36,42],[590,992,36,42],[398,1056,36,42],[462,1056,36,42],[526,1056,36,42],[590,1056,36,42]],
+  lamp: [[352,748,32,84],[384,748,32,84],[416,748,32,84]],
+  rug: [[8,989,173,67],[202,989,173,67],[8,1085,173,67],[204,1085,173,67]],
+  bedOval: [[711,612,50,28],[775,612,50,28],[711,644,50,28],[775,644,50,28],[711,676,50,28],[775,676,50,28],[711,708,50,28],[775,708,50,28]],
+  toy: [[458,560,43,34],[524,591,43,34],[458,622,43,34],[523,659,43,34],[523,721,43,34],[391,626,52,33],[579,550,22,20],[644,551,22,20],[579,583,22,20],[644,584,22,20],[709,569,22,15],[741,569,22,15],[708,548,24,12],[740,548,24,12],[390,553,19,18],[422,553,19,18]],
+};
+// 單張圖與切格圖（★換圖★ 檔名）
+const ROOM_IMAGES = [ ['bedBlue','CatBedBlue.png'], ['bedBrown','CatBedBrown.png'], ['bedGreen','CatBedGreen.png'], ['bedPink','CatBedPink.png'], ['bedPurple','CatBedPurple.png'], ['bedRed','CatBedRed.png'],
+                      ['treeA','CatPlayGround.png'], ['treeB','CatPlayGroundLighter.png'], ['treeC','ChristmasPlayGround.png'] ];
+const ROOM_SHEETS = [ ['homes','CatHomes.png',63,63], ['boxes','CatBoxes.png',64,64], ['posts','toyss.png',64,64] ];   // [key, 檔名, 格寬, 格高]
+
+// 物品分類：dy = 預設擺放高度（0=天花板 1=地板）；anchor:'top' = 吊在上方；depth = 固定圖層（地毯在最底、窗戶在牆上）
+const CATEGORIES = [
+  { id:'cat',     label:'🐱 貓咪', dy:.86 },
+  { id:'bed',     label:'🛏 貓窩', dy:.88 },
+  { id:'carrier', label:'🧳 貓籠', dy:.88 },
+  { id:'tree',    label:'🗼 跳台', dy:.88 },
+  { id:'window',  label:'🪟 窗戶', dy:.42, depth:2 },
+  { id:'photo',   label:'🖼 相框', dy:.32, depth:2 },
+  { id:'lamp',    label:'💡 立燈', dy:.88 },
+  { id:'ceil',    label:'🔆 吊燈', dy:.02, anchor:'top', depth:3 },
+  { id:'bowl',    label:'🥣 貓碗', dy:.92 },
+  { id:'toy',     label:'🧸 玩具', dy:.92 },
+  { id:'plant',   label:'🌿 盆栽', dy:.88 },
+  { id:'rug',     label:'🟫 地毯', dy:.90, depth:1 },
+];
+// 物品清單（k = 預設顯示大小，玩家還可以再縮放；找不到圖片時自動用色塊 Fallback）
+const ITEMS = [];
+(function buildItems(){
+  const add = (cat, id, k, src) => ITEMS.push({ id, cat, k, src });
+  ROOM_IMAGES.filter(r => r[0].startsWith('bed')).forEach(r => add('bed', r[0], .8, { key:'im_' + r[0] }));
+  for(let i = 0; i < 4; i++) add('bed', 'home' + i, .9, { key:'sh_homes', frame:i });
+  ATLAS_RECTS.bedOval.forEach((r, i) => add('bed', 'oval' + i, 1.0, { rect:r }));
+  for(let i = 0; i < 8; i++) add('carrier', 'box' + i, .8, { key:'sh_boxes', frame:i });
+  ['treeA', 'treeB', 'treeC'].forEach(id => add('tree', id, .6, { key:'im_' + id }));
+  for(let i = 0; i < 4; i++) add('tree', 'post' + i, .8, { key:'sh_posts', frame:i });
+  ATLAS_RECTS.curtain.forEach((r, i) => add('window', 'curtain' + i, .85, { rect:r }));
+  ATLAS_RECTS.grid.forEach((r, i) => add('window', 'grid' + i, 1.0, { rect:r }));
+  ATLAS_RECTS.frame.forEach((r, i) => add('photo', 'frame' + i, i < 10 ? 2.0 : 1.2, { rect:r }));
+  ATLAS_RECTS.lamp.forEach((r, i) => add('lamp', 'lamp' + i, .9, { rect:r }));
+  ATLAS_RECTS.ceil.forEach((r, i) => add('ceil', 'ceil' + i, 1.0, { rect:r }));
+  ATLAS_RECTS.bowl.forEach((r, i) => add('bowl', 'bowl' + i, .6, { rect:r }));
+  ATLAS_RECTS.toy.forEach((r, i) => add('toy', 'toy' + i, 1.0, { rect:r }));
+  ATLAS_RECTS.plant.forEach((r, i) => add('plant', 'plant' + i, r[3] > 40 ? 1.0 : 1.4, { rect:r }));
+  ATLAS_RECTS.rug.forEach((r, i) => add('rug', 'rug' + i, .6, { rect:r }));
+})();
+const ROOM_CATS = [ { id:'nunu', k:1.15 }, { id:'mushroom', k:1.15 }, { id:'yangyang', k:1.15 } ];
+const CAT_COLORS = { bed:'#e6b3c2', carrier:'#8a6a58', tree:'#c9a27e', window:'#9ec9e6', photo:'#d7b7e6', lamp:'#f0d070', ceil:'#f0d070', bowl:'#e0a0a0', toy:'#c8a070', plant:'#6bb36f', rug:'#ff9fb3' };
+
+/* --------------------------------------------------------------------------
+   題庫（photoUrl 欄位 = 拍立得照片路徑，★換圖★ 想換照片改這裡即可）
+   answers = 正確選項索引（0=A,1=B,2=C,3=D）；trapIndex = 陷阱選項
+   -------------------------------------------------------------------------- */
+const ROUTES = [
+  {
+    id: 1, title: '2014 的時光膠囊', short: '時光膠囊', cat: 'nunu', fragment: '謝謝妳', pos: ['0%', '0%'],
+    questions: [
+      { q: '我們第一次用通訊軟體聊天是在什麼時候，用什麼通訊軟體？',
+        options: ['2013 年 / LINE', '2014 年 / Messenger', '2012 年 / LINE', '2013 年 / Messenger'], answers: [3],
+        explain: '這是我們故事的開端，那時沒有人知道未來會長這樣。', photoUrl: 'photo_q1_1.jpg' },
+      { q: '下列哪件事是某個理工直男「沒有」做過的舉動？',
+        options: ['去花店選花送給妳', '做一份情人節考察行程問卷', '鉤織出一件毯子送給妳', '煮鮮奶麻糬黑糖水給妳喝'], answers: [2],
+        explain: '雖然最後還是送成品給妳了。', photoUrl: 'photo_q1_2.jpg' },
+      { q: '去年的自製一番賞抽獎裡，妳覺得哪一個獎品最能代表我的真心？',
+        options: ['Miffy 化妝鏡', 'Le Labo 香水小樣', '那幾張可以為所欲為的「隨意使喚券」', '一番賞本身就是真心'], answers: [0, 1, 2, 3],
+        explain: '不管哪一個，妳抽到時開心的樣子就是最好的大獎。', photoUrl: 'photo_q1_3.jpg' },
+      { q: '下列哪個選項你們「沒有」一起做過？',
+        options: ['跑去動物園看企鵝', '去台北小巨蛋溜冰', '去湯姆熊打太鼓達人', '去安森跟花博野餐'], answers: [2],
+        explain: '只要能跟妳在一起去哪裡都很開心。', photoUrl: 'photo_q1_4.jpg' },
+    ],
+  },
+  {
+    id: 2, title: '心跳漏拍的瞬間', short: '心跳漏拍', cat: 'mushroom', fragment: '沒有逃跑', pos: ['100%', '0%'],
+    questions: [
+      { q: '去年 5 月 9 號新莊棒球場看球結束後，是什麼動作讓妳心裡冒出「他好像狗、好可愛」的念頭？',
+        options: ['搶著幫妳提重物', '蹲在地上讓妳休息然後伸手牽妳', '幫妳把安全帽扣好', '一直眼巴巴望著妳不講話'], answers: [1],
+        explain: '原來從那時候就開始像狗狗了🐶。', photoUrl: 'photo_q2_1.jpg' },
+      { q: '隔天 5 月 10 號中午吃麵屋和和，妳偷偷傳訊息跟朋友說「完蛋了」，原因是什麼？',
+        options: ['拉麵吃不完', '妳竟然覺得對面的我長得挺好看', '發現自己錢包忘記帶', '不小心把湯汁噴到衣服上'], answers: [1],
+        explain: '妳太擅長不動聲色，坐在對面的我什麼都沒發現。', photoUrl: 'photo_q2_2.jpg' },
+      { q: '聖誕節前夕，有人獨自吃醋難過，後來妳送了一朵鉤織花給他，當時妳是怎麼安撫他的？',
+        options: ['說這朵花是特別找大師訂做的', '說買給他的比較貴，送別人的只是在捷運站剛好看到隨手買的', '答應下次單獨跟他去吃大餐', '說少爺那朵只是友情贊助'], answers: [1],
+        explain: '某人那天收完花，整個人瞬間原地滿血復活。', photoUrl: 'photo_q2_3.jpg' },
+      { q: '每次在妳覺得變胖、外貌沒自信時，某個小狗在妳身邊扮演的最稱職角色是？',
+        options: ['嚴格控管卡路里的教練', '不管怎樣都真誠誇獎妳的「全肯定機器人」', '默默把食物吃光的廚餘桶', '假裝沒看見的木頭人'], answers: [1],
+        explain: '因為我喜歡妳就是妳，不管妳的外在如何，妳的靈魂本身就在發光。', photoUrl: 'photo_q2_4.jpg' },
+    ],
+  },
+  {
+    id: 3, title: '在真理中對焦', short: '真理對焦', cat: 'yangyang', fragment: '一起冒險', pos: ['0%', '100%'],
+    questions: [
+      { q: '下面哪一句話讓妳在猶豫退縮時，願意勇敢邁出步伐？',
+        options: ['盡情地享受過程', '親密關係需要冒險', '愛是恆久忍耐，又有恩慈', '萬事都互相效力，叫愛神的人得益處'], answers: [1],
+        explain: '謝謝妳願意踏出這一步，和我一起承擔這份冒險。', photoUrl: 'photo_q3_1.jpg' },
+      { q: '從不知何時開始，我們建立起每週六固定的相處模式，通常在小組結束後我們會一起做什麼，直到不得不去趕末班火車？',
+        options: ['在三號公園坐著聊天', '陪妳搭捷運回永安市場，在站外聊到最後一刻', '一起去吃晚餐', '以上皆是'], answers: [3],
+        explain: '每個趕火車的週末夜晚，都是我一個禮拜裡最珍惜的充電時光。', photoUrl: 'photo_q3_2.jpg' },
+      { q: '當妳忙於讀書減少聯絡、某人患得患失時，他在禱告中反覆默想宣告的是哪一段經文？',
+        options: ['哥林多前書 13 章（愛的真諦）', '羅馬書 8:25-28（我們若盼望那所不見的，就必忍耐等候）', '詩篇 23 篇（耶和華是我的牧者）', '馬太福音 6 章（主禱文）'], answers: [1],
+        explain: '學會交託與放下掌控，是上帝讓我學會的美好祝福。', photoUrl: 'photo_q3_3.jpg' },
+      { q: '在交往的約定中，彼此心裡最堅定的「第一優先順位」永遠是誰？',
+        options: ['張宇翔 / 莊昕耘', '耶穌（上帝）', '努努 / 蘑菇 / 秧秧', '彼此的家人'], answers: [1],
+        explain: '最愛耶穌，再來是妳。因為祂先愛我們，我們才能這樣相愛。', photoUrl: 'photo_q3_4.jpg' },
+    ],
+  },
+  {
+    id: 4, title: '現在與未來', short: '現在與未來', cat: 'cat', fragment: '1022生日快樂', pos: ['100%', '100%'],
+    questions: [
+      { q: '8 月 2 號告白的最後，我對妳說出的告白詞是？',
+        options: ['妳願意把下半輩子交給我嗎？', '金說一定要享受旅程，而我想說：我想跟妳一起享受旅程，妳願意跟我交往嗎？', '妳是我見過最特別的女孩，跟我交往吧！', '我們已經認識十二年了，希望以後每年都有妳在身邊，妳願意跟我交往嗎？'], answers: [1],
+        explain: '這趟旅程只要有妳在，沿途的風景就都很美。', photoUrl: 'photo_q4_1.jpg' },
+      { q: '關於「最喜歡關係的哪一部分」，下列哪一句「不是」兩人在當天親筆寫下的內容？',
+        options: ['Alvin：喜歡我們接受自己的不完美、對方的不完美，讓上帝在我們關係裡做工', 'yun：最喜歡小乖無論如何都很包容，所以可以誠實自在表達感受和想法', 'Alvin：喜歡在小組結束後陪妳回永安市場，在站外聊到不得不去趕末班火車', 'yun：喜歡自己偶爾嘴賤，但小乖覺得很好笑很有趣'], answers: [2],
+        explain: '雖然聊到要趕末班車也是真的喜歡，但有好多更喜歡的地方。', photoUrl: 'photo_q4_2.jpg' },
+      { q: '回顧這兩年的重逢與陪伴，宇翔最常對妳心懷感謝的是什麼？',
+        options: ['謝謝妳帶我認識上帝', '謝謝妳在我的不成熟與調整過程中，從來沒有真的逃跑', '謝謝妳總是會提醒我，對我有耐心', '以上皆是！還有很多沒列出來的感謝！'], answers: [3],
+        explain: '謝謝妳的陪伴、付出、包容，讓我看見愛的模樣。', photoUrl: 'photo_q4_3.jpg' },
+      { q: '【終極抉擇】此時此刻，妳最想對張宇翔做什麼？',
+        options: ['緊緊把他抱在懷裡', '溫柔親他一下', '大力吸他的味道', '海扁他'], answers: [0, 1, 2], trapIndex: 3,
+        explain: '那就趕快去做💖！', photoUrl: 'photo_q4_4.jpg' },
+    ],
+  },
+];
+// 路線四 Q4-4 陷阱的提示文字（第 1、2 次選「海扁他」；第 3 次直接 Bad End）
+const TRAP_MSGS = ['再想一下喔🥺', '真的要扁我嗎？最後一次機會喔！'];
+
+/* ==========================================================================
+   存檔
+   ========================================================================== */
+function defaultSave(){ return { cleared:[false,false,false,false], bg:ROOM_BG_DEFAULT, room:[] }; }
+function loadSave(){
+  try{ const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if(s && Array.isArray(s.cleared)) return Object.assign(defaultSave(), s); }catch(e){}
+  return defaultSave();
+}
+let save = loadSave();
+function persist(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} }
+
+/* ==========================================================================
+   小工具
+   ========================================================================== */
+const $ = (id) => document.getElementById(id);
+const clearedCount = () => save.cleared.filter(Boolean).length;
+const assetUrl = (f) => ASSET_PATH + f;
+document.documentElement.style.setProperty('--couple-img', `url("${assetUrl(COUPLE_PHOTO)}")`);
+
+function celebrate(){
+  if(typeof confetti !== 'function') return;
+  const end = Date.now() + 3500;
+  confetti({ particleCount: 160, spread: 100, origin:{ y:.6 }, zIndex: 300 });
+  (function frame(){
+    confetti({ particleCount: 6, angle: 60,  spread: 70, origin:{ x:0, y:.8 }, zIndex: 300 });
+    confetti({ particleCount: 6, angle: 120, spread: 70, origin:{ x:1, y:.8 }, zIndex: 300 });
+    if(Date.now() < end) requestAnimationFrame(frame);
+  })();
+}
+function smallBurst(x, y){
+  if(typeof confetti !== 'function') return;
+  confetti({ particleCount: 36, spread: 70, startVelocity: 28, scalar:.8, origin:{ x: x/innerWidth, y: y/innerHeight }, zIndex: 300 });
+}
+function showDialog(text, cb){
+  $('dlg-text').textContent = text; $('m-dialog').classList.remove('hidden');
+  $('dlg-ok').onclick = () => { $('m-dialog').classList.add('hidden'); cb && cb(); };
+}
+
+/* ==========================================================================
+   Phaser：素材載入失敗時的 Fallback 工具
+   ========================================================================== */
+// 貓咪 Fallback：用 Canvas 畫彩色方塊小貓（每個影格略有動作差異）
+function makeFallbackCatSheet(scene, key, cat, action){
+  const frames = ANIM_DEF[action].frames;
+  const tex = scene.textures.createCanvas(key, FRAME_W * frames, FRAME_H);
+  if(!tex) return;
+  const ctx = tex.context, hue = CATS[cat].hue;
+  for(let i = 0; i < frames; i++){
+    const ox = i * FRAME_W, t = i / frames;
+    let bob = Math.sin(t * Math.PI * 2) * 1.5;
+    if(action === 'jump') bob = -Math.abs(Math.sin(t * Math.PI)) * 12;
+    if(action === 'sleep') bob = 4;
+    ctx.fillStyle = `hsl(${hue},70%,68%)`;
+    ctx.fillRect(ox + 6, 12 + bob, 20, 17);                    // 身體
+    ctx.fillRect(ox + 6, 7 + bob, 5, 6); ctx.fillRect(ox + 21, 7 + bob, 5, 6);   // 耳朵
+    ctx.fillStyle = '#3a2a2a';
+    if(action === 'hurt'){ ctx.font = 'bold 9px sans-serif'; ctx.fillText('×', ox + 9, 20 + bob); ctx.fillText('×', ox + 18, 20 + bob); }
+    else if(action === 'sleep'){ ctx.fillRect(ox + 9, 19 + bob, 5, 1); ctx.fillRect(ox + 18, 19 + bob, 5, 1); }
+    else { ctx.fillRect(ox + 10, 17 + bob, 3, 3); ctx.fillRect(ox + 19, 17 + bob, 3, 3); }
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 8px sans-serif'; ctx.fillText(CATS[cat].glyph, ox + 12, 27 + bob);
+  }
+  tex.refresh();
+  for(let i = 0; i < frames; i++) tex.add(i, 0, i * FRAME_W, 0, FRAME_W, FRAME_H);
+}
+// 傢俱 Fallback：彩色圓角方塊 + 文字
+function makeFallbackBlock(scene, key, w, h, color, label){
+  const S = 3, tex = scene.textures.createCanvas(key, w * S, h * S);   // 放大 3 倍比較清楚
+  if(!tex) return;
+  const c = tex.context;
+  c.fillStyle = color; c.strokeStyle = '#00000055'; c.lineWidth = 4;
+  c.beginPath(); c.roundRect ? c.roundRect(3, 3, w * S - 6, h * S - 6, 18) : c.rect(3, 3, w * S - 6, h * S - 6); c.fill(); c.stroke();
+  c.fillStyle = '#fff'; c.font = `bold ${Math.max(18, Math.min(w, h) * S * .26)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(label, w * S / 2, h * S / 2); tex.refresh();
+}
+// 房間底圖 Fallback（找不到 N.png 時使用）
+function ensureRoomBg(scene, n){
+  const key = `room_bg_${n}`;
+  if(scene.textures.exists(key)) return key;
+  const tex = scene.textures.createCanvas(key, 180, 320), c = tex.context;
+  c.fillStyle = '#a9d0d4'; c.fillRect(0, 0, 180, 320);
+  c.fillStyle = '#5a8a8f'; c.fillRect(0, 0, 22, 320); c.fillRect(158, 0, 22, 320);
+  c.fillStyle = '#efc7b0'; c.fillRect(0, 245, 180, 75);
+  c.fillStyle = '#ffffffaa'; c.font = 'bold 10px sans-serif'; c.textAlign = 'center'; c.fillText(`(背景預留 ${ROOM_BG_FILE(n)})`, 90, 150);
+  tex.refresh(); return key;
+}
+
+/* ==========================================================================
+   Phaser Scene 1：BootScene — 載入素材 + 建立動畫
+   ========================================================================== */
+class BootScene extends Phaser.Scene {
+  constructor(){ super('BootScene'); }
+
+  preload(){
+    this.load.setPath(ASSET_PATH);
+    this.load.on('progress', (v) => { $('load-bar').style.width = Math.round(v * 100) + '%'; });
+    this.load.on('loaderror', (f) => console.warn('[素材載入失敗→改用 Fallback]', f.key, f.url));
+
+    /* ┌──────────────────────────────────────────────────────────────┐
+       │ ★ 教學範例：若你用「單張合集 cat_sheet.png」，寫法如下：        │
+       │   this.load.spritesheet('cat', 'assets/cat_sheet.png',        │
+       │        { frameWidth: 32, frameHeight: 32 });                  │
+       │ 然後在 create() 用 this.anims.create 依「格子編號」切出動畫：   │
+       │   this.anims.create({ key:'idle', frames:                     │
+       │       this.anims.generateFrameNumbers('cat',{start:0,end:6}), │
+       │       frameRate:6, repeat:-1 });                              │
+       │ 你的素材是「每個動作一張單排圖」，所以下面改成逐檔載入。       │
+       └──────────────────────────────────────────────────────────────┘ */
+    for(const [cat, def] of Object.entries(CATS)){
+      for(const [act, file] of Object.entries(def.files)){
+        // 紋理 key 規則：「貓咪_動作」，例如 nunu_idle、cat_jump
+        this.load.spritesheet(`${cat}_${act}`, file, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+      }
+    }
+
+    // 模式二：傢俱素材（單張圖 / 切格圖 / 大圖集）
+    ROOM_IMAGES.forEach(([k, f]) => this.load.image('im_' + k, f));
+    ROOM_SHEETS.forEach(([k, f, w, h]) => this.load.spritesheet('sh_' + k, f, { frameWidth: w, frameHeight: h }));
+    this.load.image('furn_atlas', FURN_ATLAS);
+    // 模式二：房間底圖 1.png ~ 20.png（★換圖★ 見 CONFIG）
+    for(let n = 1; n <= ROOM_BG_COUNT; n++) this.load.image(`room_bg_${n}`, ROOM_BG_FILE(n));
+  }
+
+  create(){
+    /* ---- 1) 建立 Fallback：找不到圖片時，用 Canvas 畫彩色方塊代替 ---- */
+    for(const [cat] of Object.entries(CATS)){
+      for(const act of Object.keys(ANIM_DEF)){
+        const key = `${cat}_${act}`;
+        if(!this.textures.exists(key)) makeFallbackCatSheet(this, key, cat, act);
+      }
+    }
+    // 先把大圖集切出各傢俱的 frame（名稱 = 物品 id）
+    const hasAtlas = this.textures.exists('furn_atlas');
+    const atl = hasAtlas ? this.textures.get('furn_atlas') : null;
+    for(const it of ITEMS){
+      const s = it.src; let key = null, frame, px = 1;
+      if(s.rect && hasAtlas){ atl.add(it.id, 0, s.rect[0], s.rect[1], s.rect[2], s.rect[3]); key = 'furn_atlas'; frame = it.id; }
+      else if(s.key && this.textures.exists(s.key) && (s.frame === undefined || this.textures.get(s.key).has(s.frame))){ key = s.key; frame = s.frame; }
+      if(!key){            // ★ Fallback：找不到圖片 → 彩色方塊 + 分類名稱
+        const w = s.rect ? s.rect[2] : 64, h = s.rect ? s.rect[3] : 64;
+        key = `fb_${it.cat}_${w}x${h}`;
+        if(!this.textures.exists(key)) makeFallbackBlock(this, key, w, h, CAT_COLORS[it.cat] || '#ccc', CATEGORIES.find(c => c.id === it.cat).label.split(' ')[1]);
+        frame = undefined; px = 1 / 3;
+      }
+      it.tex = { key, frame, px };
+    }
+    /* ---- 2) 建立動畫 ----
+       anims.create 的寫法示範：每個「貓咪_動作」建立同名動畫 key。 */
+    for(const [cat] of Object.entries(CATS)){
+      for(const [act, d] of Object.entries(ANIM_DEF)){
+        const key = `${cat}_${act}`;
+        if(this.anims.exists(key)) continue;
+        const total = this.textures.get(key).getFrameNames().length;     // 實際影格數（不含 __BASE）
+        const end = Math.max(0, Math.min(d.frames, total) - 1);
+        this.anims.create({
+          key,                                                              // 例：nunu_idle
+          frames: this.anims.generateFrameNumbers(key, { start: 0, end }),  // 從第 0 格到第 end 格
+          frameRate: d.rate,
+          repeat: d.repeat,                                                 // -1 = 無限循環
+        });
+      }
+    }
+    this.scene.stop();
+    onAssetsReady();
+  }
+}
+
+/* ==========================================================================
+   Phaser Scene 2：HubScene — 四隻守門貓（位置跟著 DOM 的 .gslot 對齊）
+   ========================================================================== */
+class HubScene extends Phaser.Scene {
+  constructor(){ super('HubScene'); }
+  create(){
+    this.cats = ROUTES.map((r) => {
+      const s = this.add.sprite(0, 0, `${r.cat}_idle`).setOrigin(.5, 1);
+      s.play(`${r.cat}_idle`); s.setData('mode', 'idle'); return s;
+    });
+  }
+  update(){
+    const stage = $('stage').getBoundingClientRect();
+    const slots = document.querySelectorAll('#guardians .gslot');
+    this.cats.forEach((s, i) => {
+      const el = slots[i];
+      if(!el || el.offsetParent === null){ s.setVisible(false); return; }
+      const r = el.getBoundingClientRect();
+      const sc = Math.max(1, Math.round(r.width * .8 / FRAME_W));
+      s.setScale(sc).setPosition(r.left - stage.left + r.width / 2, r.bottom - stage.top - 4).setVisible(true);
+      // 通關 → sleep 動畫；未通關 → idle 動畫
+      const want = save.cleared[i] ? 'sleep' : 'idle';
+      if(s.getData('mode') !== want){ s.setData('mode', want); s.play(`${ROUTES[i].cat}_${want}`); }
+    });
+  }
+}
+
+/* ==========================================================================
+   Phaser Scene 3：QuizScene — 答題陪伴貓
+   ========================================================================== */
+class QuizScene extends Phaser.Scene {
+  constructor(){ super('QuizScene'); }
+  init(data){ this.catKey = data.cat; }
+  create(){
+    this.shadow = this.add.ellipse(0, 0, 60, 14, 0x000000, .12);
+    this.sprite = this.add.sprite(0, 0, `${this.catKey}_idle`).setOrigin(.5, 1);
+    this.sprite.play(`${this.catKey}_idle`);
+    this.mode = 'idle';
+    // 待機時每 3 秒在 idle / walk 之間切換
+    this.time.addEvent({ delay: 3000, loop: true, callback: () => {
+      if(this.busy) return;
+      this.mode = this.mode === 'idle' ? 'walk' : 'idle';
+      if(this.mode === 'walk') this.sprite.flipX = !this.sprite.flipX;
+      this.sprite.play(`${this.catKey}_${this.mode}`);
+    }});
+  }
+  // 供 DOM 呼叫：react('jump') 選對開心跳；react('hurt') 選錯受驚 1 秒後回 idle
+  react(kind){
+    if(!this.sprite) return;
+    this.busy = true; this.mode = 'idle';
+    this.sprite.play(`${this.catKey}_${kind}`);
+    this.sprite.chain(`${this.catKey}_idle`);
+    this.time.delayedCall(kind === 'hurt' ? 1000 : 950, () => { this.busy = false; });
+  }
+  update(){
+    const el = $('q-catslot');
+    if(!el || el.offsetParent === null || !this.sprite) return;
+    const st = $('stage').getBoundingClientRect(), r = el.getBoundingClientRect();
+    const sc = Math.max(2, Math.floor(Math.min(r.width, r.height) * .78 / FRAME_H));
+    const x = r.left - st.left + r.width / 2, y = r.bottom - st.top - 10;
+    this.sprite.setScale(sc).setPosition(x, y);
+    this.shadow.setPosition(x, y - 2).setSize(FRAME_W * sc * .6, 12);
+  }
+  getCenter(){ return this.sprite ? { x: this.sprite.x, y: this.sprite.y - this.sprite.displayHeight / 2 + $('stage').getBoundingClientRect().top } : { x: innerWidth / 2, y: innerHeight / 2 }; }
+}
+
+/* ==========================================================================
+   Phaser Scene 4：RoomScene — 模式二：貓咪小屋（拖曳佈置，完全由 Phaser 負責）
+   ========================================================================== */
+class RoomScene extends Phaser.Scene {
+  constructor(){ super('RoomScene'); }
+
+  create(){
+    const W = this.scale.width, H = this.scale.height;
+    this.cameras.main.setBackgroundColor('#f6e3d3');
+    this.barH = Math.round(Math.min(136, Math.max(112, H * .17)));
+    this.roomBottom = H - this.barH;
+    this.s = Math.max(1, Math.min(W / 180, this.roomBottom / 320));      // 房間底圖縮放（contain）
+    this.rw = 180 * this.s; this.rh = 320 * this.s;
+    this.roomX = (W - this.rw) / 2; this.roomTop = this.roomBottom - this.rh;
+    this.placed = []; this.gest = null; this.selected = null; this.pinch = null;
+    this.tab = 'cat'; this.tabScroll = 0; this.slotScroll = 0;
+
+    // 背景（點空白處 = 取消選取）
+    this.bg = this.add.image(W / 2, this.roomBottom, ensureRoomBg(this, save.bg)).setOrigin(.5, 1).setScale(this.s).setDepth(-100).setInteractive();
+    this.bg.on('pointerup', (p) => { if(p.getDistance() < 10) this.select(null); });
+
+    // 物品定義表
+    this.defs = {};
+    ROOM_CATS.forEach(c => { this.defs[c.id] = { id:c.id, kind:'cat', cat:'cat', k:c.k, label:CATS[c.id].name, dy:.86 }; });
+    ITEMS.forEach(it => {
+      const cat = CATEGORIES.find(c => c.id === it.cat);
+      this.defs[it.id] = { id:it.id, kind:'furn', cat:it.cat, k:it.k, key:it.tex.key, frame:it.tex.frame, px:it.tex.px, depth:cat.depth, anchor:cat.anchor, dy:cat.dy };
+    });
+
+    this.sel = this.add.graphics().setDepth(9100);
+    this.buildBar(W);
+    this.buildButtons(W);
+    this.buildControls(W);
+    this.selectTab('cat');
+
+    // 還原上次擺放
+    (save.room || []).forEach(r => {
+      if(!this.defs[r.id]) return;
+      const o = this.spawn(r.id, this.roomX + r.nx * this.rw, this.roomTop + r.ny * this.rh);
+      this.setObjScale(o, r.sc || 1); if(r.fx) o.flipX = !o.flipX;
+    });
+
+    // 提示文字（幾秒後淡出）
+    this.hint = this.add.text(W / 2, this.roomBottom - 8, '點物品欄放進小屋・上拖可擺放・點選物品可縮放', this.tstyle(12, '#5b3f35', '#ffffffdd')).setOrigin(.5, 1).setDepth(9999).setPadding(8, 4, 8, 4);
+    this.tweens.add({ targets: this.hint, alpha: 0, delay: 7000, duration: 800 });
+
+    /* ---- 拖曳：已擺放的物件用 setDraggable ---- */
+    this.input.on('dragstart', (p, o) => { if(this.selected !== o) this.select(o); o.setAlpha(.88).setDepth(9000); });
+    this.input.on('drag', (p, o, dx, dy) => { if(this.pinch) return; const c = this.clamp(o, dx, dy); o.setPosition(c.x, c.y); });
+    this.input.on('dragend', (p, o) => {
+      o.setAlpha(1);
+      if(p.y > this.roomBottom) return this.removeObj(o);            // 拖進物品欄 = 收起來
+      this.settle(o);
+    });
+    // 點物品 → 選取（可縮放）；點貓咪 → 隨機 idle / jump / sleep
+    this.input.on('gameobjectup', (p, o) => {
+      if(p.getDistance() >= 10 || !o.getData('id')) return;
+      this.select(o);
+      if(o.getData('isCat')) this.catReact(o);
+    });
+
+    /* ---- 物品欄手勢：左右滑動 = 捲動；往上拖 = 拖出物品；輕點 = 放進房間 ---- */
+    this.input.on('pointermove', (p) => {
+      // 雙指縮放（選取物品時）
+      const p1 = this.input.pointer1, p2 = this.input.pointer2;
+      if(this.selected && p1.isDown && p2.isDown){
+        const d = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
+        if(!this.pinch) this.pinch = { d0: d, sc0: this.selected.getData('sc') || 1 };
+        else this.setObjScale(this.selected, this.pinch.sc0 * d / this.pinch.d0);
+        return;
+      }
+      const g = this.gest; if(!g) return;
+      const dx = p.x - g.sx, dy = p.y - g.sy;
+      if(g.mode === 'wait'){
+        if(Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) g.mode = 'scroll';
+        else if(g.kind === 'slot' && dy < -10 && Math.abs(dy) >= Math.abs(dx)){
+          const o = this.spawn(g.id, p.x, p.y); o.setAlpha(.9).setDepth(9000); g.obj = o; g.mode = 'drag'; this.select(null);
+        }
+      }
+      if(g.mode === 'scroll'){
+        if(g.kind === 'tab') this.setTabScroll(g.scroll0 - dx); else this.setSlotScroll(g.scroll0 - dx);
+      } else if(g.mode === 'drag'){ this.centerAt(g.obj, p); }
+    });
+    this.input.on('pointerup', (p) => {
+      if(!(this.input.pointer1.isDown && this.input.pointer2.isDown)) this.pinch = null;
+      const g = this.gest; if(!g) return; this.gest = null;
+      if(g.mode === 'wait'){                                    // 輕點
+        if(g.kind === 'tab') this.selectTab(g.id);
+        else if(g.kind === 'slot'){ this.placeDefault(g.id); }
+      } else if(g.mode === 'drag'){
+        if(p.y > this.roomBottom) return this.removeObj(g.obj);
+        g.obj.setAlpha(1); this.settle(g.obj); this.select(g.obj);
+      }
+    });
+
+    // 視窗大小改變 → 重新排版（擺放位置已存檔，會自動還原）
+    const onResize = () => { clearTimeout(this._rt); this._rt = setTimeout(() => this.scene.restart(), 250); };
+    this.scale.on('resize', onResize);
+    this.events.once('shutdown', () => { this.scale.off('resize', onResize); clearTimeout(this._rt); });
+  }
+
+  update(){ this.drawSel(); }
+
+  tstyle(size, color, bg){ return { fontFamily: '-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif', fontSize: size + 'px', fontStyle: 'bold', color, backgroundColor: bg }; }
+  clamp(o, x, y){
+    const top = this.defs[o.getData('id')].anchor === 'top';
+    return { x: Phaser.Math.Clamp(x, this.roomX + 8, this.roomX + this.rw - 8),
+             y: top ? Phaser.Math.Clamp(y, this.roomTop, this.roomBottom - 40) : Phaser.Math.Clamp(y, this.roomTop + 24, this.roomBottom - 2) };
+  }
+  centerAt(o, p){ const top = this.defs[o.getData('id')].anchor === 'top'; o.setPosition(p.x, p.y + (top ? -1 : 1) * o.displayHeight * .5); }
+  settle(o){
+    const c = this.clamp(o, o.x, o.y); o.setPosition(c.x, c.y);
+    o.setDepth(this.defs[o.getData('id')].depth ?? o.y);
+    this.saveRoom();
+  }
+  removeObj(o){ if(this.selected === o) this.select(null); this.placed = this.placed.filter(x => x !== o); o.destroy(); this.saveRoom(); }
+  saveRoom(){
+    save.room = this.placed.map(o => ({ id: o.getData('id'), nx: +((o.x - this.roomX) / this.rw).toFixed(4), ny: +((o.y - this.roomTop) / this.rh).toFixed(4), sc: +(o.getData('sc') || 1).toFixed(3), fx: o.getData('fx') ? 1 : 0 }));
+    persist();
+  }
+
+  // 生成一個可拖曳的物件
+  spawn(id, x, y){
+    const d = this.defs[id]; let o;
+    if(d.kind === 'cat'){
+      o = this.add.sprite(x, y, `${id}_idle`).setOrigin(.5, 1);
+      o.play(`${id}_idle`); o.setData('isCat', true); o.flipX = Math.random() < .5;
+    } else {
+      o = this.add.image(x, y, d.key, d.frame).setOrigin(.5, d.anchor === 'top' ? 0 : 1);
+    }
+    o.setData('id', id); o.setData('sc', 1); o.setData('fx', o.flipX ? 1 : 0);
+    this.setObjScale(o, 1, true);
+    o.setDepth(d.depth ?? y);
+    o.setInteractive({ useHandCursor: true });
+    this.input.setDraggable(o);
+    this.placed.push(o);
+    return o;
+  }
+  // ★ 縮放：sc 是「相對預設大小」的倍率（0.3 ~ 4）
+  setObjScale(o, sc, silent){
+    sc = Phaser.Math.Clamp(sc, .3, 4);
+    const d = this.defs[o.getData('id')];
+    o.setData('sc', sc); o.setScale(d.k * this.s * (d.px || 1) * sc);
+    if(this.selected === o) this.updateCtl();
+    if(!silent) this.saveRoomSoon();
+  }
+  saveRoomSoon(){ clearTimeout(this._sv); this._sv = setTimeout(() => this.saveRoom(), 300); }
+
+  placeDefault(id){            // 輕點物品欄：放到預設位置
+    const d = this.defs[id];
+    const x = this.roomX + this.rw / 2 + Phaser.Math.Between(-45, 45);
+    const y = this.roomTop + this.rh * d.dy + (d.depth ? 0 : Phaser.Math.Between(-18, 18));
+    const o = this.spawn(id, x, y); this.settle(o); this.select(o);
+  }
+
+  /* ---- 選取與縮放控制 ---- */
+  select(o){
+    this.selected = o || null;
+    this.ctl.forEach(c => c.setVisible(!!o));
+    if(o){ this.hint.setAlpha(0); this.updateCtl(); }
+  }
+  drawSel(){
+    this.sel.clear();
+    const o = this.selected; if(!o || !o.active) return;
+    const b = o.getBounds();
+    this.sel.lineStyle(2, 0xff4f7a, 1).strokeRoundedRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6, 6);
+  }
+  updateCtl(){ if(this.selected) this.pctText.setText(Math.round((this.selected.getData('sc') || 1) * 100) + '%'); }
+  buildControls(W){
+    const y = this.roomBottom - 8, st = this.tstyle(22, '#5b3f35', '#ffffffee');
+    const mk = (txt, fn, style) => { const b = this.add.text(0, y, txt, style || st).setOrigin(0, 1).setPadding(9, 4, 9, 4).setDepth(10500).setInteractive({ useHandCursor: true }).setVisible(false); b.on('pointerdown', (p, lx, ly, ev) => { fn(); }); return b; };
+    const step = (f) => () => { if(this.selected){ this.setObjScale(this.selected, (this.selected.getData('sc') || 1) * f); } };
+    const bMinus = mk('➖', step(1 / 1.15)), bPct = this.add.text(0, y, '100%', this.tstyle(14, '#c4486a', '#ffffffee')).setOrigin(0, 1).setPadding(8, 10, 8, 10).setDepth(10500).setVisible(false);
+    const bPlus = mk('➕', step(1.15));
+    const bFlip = mk('⇄', () => { if(this.selected){ this.selected.flipX = !this.selected.flipX; this.selected.setData('fx', this.selected.flipX ? 1 : 0); this.saveRoom(); } });
+    const bDel = mk('🗑', () => { if(this.selected) this.removeObj(this.selected); });
+    this.pctText = bPct; this.ctl = [bMinus, bPct, bPlus, bFlip, bDel];
+    const total = this.ctl.reduce((a, b) => a + b.width + 4, -4); let x = (W - total) / 2;
+    this.ctl.forEach(b => { b.x = x; x += b.width + 4; });
+  }
+
+  catReact(o){
+    const id = o.getData('id'), cur = o.getData('act');
+    const pool = ['idle', 'jump', 'sleep'].filter(a => a !== cur);
+    const act = Phaser.Utils.Array.GetRandom(pool);
+    o.setData('act', act);
+    o.play(`${id}_${act}`);
+    if(act === 'jump'){ o.chain(`${id}_idle`); o.once('animationcomplete', () => o.setData('act', 'idle')); }
+    const emo = { idle: '♪', jump: '💗', sleep: '💤' }[act];
+    const t = this.add.text(o.x, o.y - o.displayHeight, emo, { fontSize: '20px' }).setOrigin(.5).setDepth(9500);
+    this.tweens.add({ targets: t, y: t.y - 30, alpha: 0, duration: 900, onComplete: () => t.destroy() });
+  }
+
+  /* ---- 底部物品欄 UI：分類頁籤（可左右滑）+ 物品列（可左右滑） ---- */
+  buildBar(W){
+    const top = this.roomBottom, bh = this.barH;
+    const g = this.add.graphics().setDepth(10000);
+    g.fillStyle(0xfff4ea, 1).fillRect(0, top, W, bh);
+    g.lineStyle(3, 0xffc9b5, 1).lineBetween(0, top, W, top);
+    this.tabY = top + 4; this.tabH = 34; this.slotY = top + 40; this.slotH = bh - 40 - 8;
+    // 底板：在空白處滑動也能捲動
+    const bgz = this.add.zone(0, top, W, bh).setOrigin(0, 0).setDepth(10000).setInteractive();
+    bgz.on('pointerdown', (p) => { const inTab = p.y < this.slotY - 2; this.startGest(inTab ? 'tab' : 'slot', null, p); });
+    // 兩個可捲動容器 + 遮罩
+    this.tabC = this.add.container(0, 0).setDepth(10001);
+    this.slotC = this.add.container(0, 0).setDepth(10001);
+    const mk = (y, h) => { const mg = this.make.graphics({ x: 0, y: 0, add: false }); mg.fillStyle(0xffffff).fillRect(0, y, W, h); return mg.createGeometryMask(); };
+    this.tabC.setMask(mk(this.tabY, this.tabH)); this.slotC.setMask(mk(this.slotY - 2, this.slotH + 4));
+    this.tabBtns = {};
+    let x = 8;
+    [{ id:'cat', label:'🐱 貓咪' }, ...CATEGORIES.filter(c => c.id !== 'cat')].forEach(c => {
+      const t = this.add.text(x, this.tabY + 3, c.label, this.tstyle(13, '#5b3f35', '#ffe9dc')).setPadding(9, 5, 9, 5);
+      const z = this.add.zone(t.x, t.y, t.width, t.height).setOrigin(0, 0).setInteractive();
+      z.on('pointerdown', (p) => this.startGest('tab', c.id, p));
+      this.tabC.add([t, z]); this.tabBtns[c.id] = t; x += t.width + 6;
+    });
+    this.tabW = x + 4;
+  }
+  startGest(kind, id, p){ this.gest = { kind, id, sx: p.x, sy: p.y, mode: 'wait', scroll0: kind === 'tab' ? this.tabScroll : this.slotScroll, obj: null }; }
+  setTabScroll(v){ this.tabScroll = Phaser.Math.Clamp(v, 0, Math.max(0, this.tabW - this.scale.width)); this.tabC.x = -this.tabScroll; }
+  setSlotScroll(v){ this.slotScroll = Phaser.Math.Clamp(v, 0, Math.max(0, this.slotW - this.scale.width)); this.slotC.x = -this.slotScroll; }
+  selectTab(id){
+    this.tab = id;
+    Object.entries(this.tabBtns).forEach(([k, t]) => t.setBackgroundColor(k === id ? '#ffb7c5' : '#ffe9dc'));
+    this.slotC.removeAll(true);
+    const list = id === 'cat' ? ROOM_CATS.map(c => c.id) : ITEMS.filter(i => i.cat === id).map(i => i.id);
+    const sw = 64, gap = 6, cardH = this.slotH, cy = this.slotY + cardH / 2;
+    list.forEach((itemId, i) => {
+      const d = this.defs[itemId], cx = 8 + i * (sw + gap) + sw / 2;
+      const key = d.kind === 'cat' ? `${itemId}_idle` : d.key, frame = d.kind === 'cat' ? 0 : d.frame;
+      const fr = this.textures.getFrame(key, frame);
+      const sc = Math.min((sw - 12) / fr.width, (cardH - (d.kind === 'cat' ? 22 : 10)) / fr.height, 4);
+      const card = this.add.rectangle(cx, cy, sw, cardH, 0xffffff, 1).setStrokeStyle(2, 0xffd2c2);
+      const icon = this.add.image(cx, cy - (d.kind === 'cat' ? 6 : 0), key, frame).setScale(sc);
+      const items = [card, icon];
+      if(d.kind === 'cat') items.push(this.add.text(cx, cy + cardH / 2 - 3, d.label, this.tstyle(11, '#5b3f35', null)).setOrigin(.5, 1));
+      const z = this.add.zone(cx, cy, sw, cardH).setInteractive();
+      z.on('pointerdown', (p) => this.startGest('slot', itemId, p));
+      this.slotC.add([...items, z]);
+    });
+    this.slotW = 8 + list.length * (sw + gap) + 4;
+    this.setSlotScroll(0);
+    // 讓被選到的頁籤捲進畫面
+    const t = this.tabBtns[id]; if(t){ if(t.x - this.tabScroll < 0) this.setTabScroll(t.x - 8); else if(t.x + t.width - this.tabScroll > this.scale.width) this.setTabScroll(t.x + t.width - this.scale.width + 8); }
+  }
+  setBg(n){ save.bg = n; persist(); this.bg.setTexture(ensureRoomBg(this, n)); }
+  buildButtons(W){
+    const y0 = Math.max(6, this.roomTop + 6), right = this.roomX + this.rw - 6;
+    const mk = (x, emo, fn) => { const b = this.add.text(x, y0, emo, { fontSize: '22px', backgroundColor: '#ffffffcc' }).setOrigin(1, 0).setPadding(8, 4, 8, 4).setDepth(10001).setInteractive({ useHandCursor: true }); b.on('pointerdown', fn); return b; };
+    mk(right, '🖼', () => openBgSheet());                          // 選擇 / 預覽房間（共 25 款）
+    mk(right - 46, '🧹', () => {                                   // 清空
+      if(!this.placed.length) return;
+      if(confirm('要把小屋裡的東西全部收起來嗎？')){ this.select(null); this.placed.forEach(o => o.destroy()); this.placed = []; this.saveRoom(); }
+    });
+  }
+}
+
+/* ==========================================================================
+   DOM：模式切換與 Hub 渲染
+   ========================================================================== */
+let game = null, assetsReady = false, currentMode = 'hub';
+
+function goScene(key, data){
+  if(!game) return;
+  ['HubScene', 'QuizScene', 'RoomScene'].forEach(k => {
+    if(game.scene.isActive(k) || game.scene.isPaused(k) || game.scene.isSleeping(k)) game.scene.stop(k);
+  });
+  game.scene.start(key, data);
+  game.canvas.style.pointerEvents = key === 'RoomScene' ? 'auto' : 'none';   // 模式二才讓畫布接收觸控
+}
+
+function showMode(mode, opts = {}){
+  currentMode = mode;
+  if(mode !== 'room') $('bgsheet').classList.add('hidden');
+  $('hub').classList.toggle('hidden', mode !== 'hub');
+  $('quiz').classList.toggle('hidden', mode !== 'quiz');
+  $('nav-quiz').classList.toggle('active', mode !== 'room');
+  $('nav-room').classList.toggle('active', mode === 'room');
+  if(mode === 'hub'){ renderHub(opts.flip); goScene('HubScene'); }
+  if(mode === 'quiz'){ goScene('QuizScene', { cat: ROUTES[Q.route].cat }); }
+  if(mode === 'room'){ goScene('RoomScene'); }
+}
+
+function onAssetsReady(){
+  assetsReady = true;
+  $('loading').classList.add('hidden');
+  $('nav-quiz').disabled = false; $('nav-room').disabled = false;
+  showMode('hub');
+}
+
+function renderHub(flipIndex){
+  const n = clearedCount();
+  $('hub-progress').textContent = `${n} / 4`;
+  // --- 四格拼圖 ---
+  const pz = $('puzzle'); pz.innerHTML = '';
+  ROUTES.forEach((r, i) => {
+    const card = document.createElement('div');
+    card.className = 'pcard' + (save.cleared[i] && i !== flipIndex ? ' flipped' : '');
+    card.innerHTML = `<div class="pinner">
+        <div class="pface pfront"><span class="lock">🔒</span><small>路線 ${r.id}</small></div>
+        <div class="pface pback" style="--px:${r.pos[0]};--py:${r.pos[1]}"><span class="pword">${r.fragment}</span></div>
+      </div>`;
+    pz.appendChild(card);
+    if(i === flipIndex) setTimeout(() => card.classList.add('flipped'), 450);   // 通關後延遲翻牌（CSS 3D Flip）
+  });
+  // ★ 集滿 4 塊：中間的切割線消失，合成一張完整合照（.pfull 是整張照片的覆蓋層）
+  const full = document.createElement('div'); full.className = 'pfull'; pz.appendChild(full);
+  pz.classList.remove('complete');
+  if(n === 4){ if(flipIndex === undefined) pz.classList.add('complete'); else setTimeout(() => pz.classList.add('complete'), 1700); }
+  // --- 守門貓（貓咪本體由 HubScene 畫在 .gslot 位置） ---
+  const gd = $('guardians'); gd.innerHTML = '';
+  ROUTES.forEach((r, i) => {
+    const b = document.createElement('button');
+    b.className = 'guardian' + (save.cleared[i] ? ' done' : '');
+    b.innerHTML = `<div class="gslot"></div><div class="gtag">路線 ${r.id}</div><div class="gname">${r.short}</div>
+      <div class="gstate">${save.cleared[i] ? '✔ 已完成' : '▶ 挑戰'}</div><div class="hearts"><i>💗</i><i>💕</i><i>💗</i></div>`;
+    b.onclick = () => startRoute(i);
+    gd.appendChild(b);
+  });
+  // --- 最終信箱 ---
+  const mb = $('btn-mailbox'), all = n === 4;
+  mb.disabled = !all; mb.classList.toggle('ready', all);
+  mb.textContent = all ? '💌 打開最終信箱' : '🔒 最終信箱（集滿 4 塊拼圖）';
+  if(flipIndex !== undefined && all) setTimeout(() => { celebrate(); showDialog('🎉 四塊拼圖集滿了！\n去點「最終信箱」吧 💌'); }, 1700);
+}
+
+$('btn-mailbox').onclick = () => {
+  if(clearedCount() < 4) return;
+  $('letter-body').innerHTML = LETTER_HTML + `<div class="gift">🎁 ${FINAL_LINE}</div>`;
+  $('m-letter').classList.remove('hidden'); $('letter-body').scrollTop = 0;
+  celebrate();
+};
+$('letter-again').onclick = celebrate;
+$('letter-close').onclick = () => $('m-letter').classList.add('hidden');
+$('btn-reset').onclick = () => {
+  if(confirm('要重置答題進度嗎？（拼圖會重新上鎖）')){ save.cleared = [false, false, false, false]; persist(); renderHub(); }
+};
+$('nav-quiz').onclick = () => { if(assetsReady && currentMode !== 'hub') showMode('hub'); };
+$('nav-room').onclick = () => { if(assetsReady && currentMode !== 'room') showMode('room'); };
+
+
+/* ==========================================================================
+   模式二：房間挑選（底部抽屜，點縮圖即時預覽）
+   ========================================================================== */
+function openBgSheet(){
+  const strip = $('bgs-strip');
+  if(!strip.children.length){
+    for(let n = 1; n <= ROOM_BG_COUNT; n++){
+      const b = document.createElement('button'); b.className = 'bgs-thumb'; b.dataset.n = n;
+      b.innerHTML = `<img src="${assetUrl(ROOM_BG_FILE(n))}" alt="" loading="lazy"><i>${n}</i>`;
+      b.firstChild.onerror = function(){ this.style.display = 'none'; };
+      b.onclick = () => pickBg(n);
+      strip.appendChild(b);
+    }
+  }
+  $('bgsheet').classList.remove('hidden'); markBg();
+  const cur = strip.querySelector('.on'); if(cur) strip.scrollLeft = cur.offsetLeft - strip.clientWidth / 2 + 30;
+}
+function markBg(){
+  document.querySelectorAll('.bgs-thumb').forEach(b => b.classList.toggle('on', +b.dataset.n === save.bg));
+  $('bgs-name').textContent = `${save.bg} / ${ROOM_BG_COUNT}`;
+}
+function pickBg(n){ const sc = game.scene.getScene('RoomScene'); if(sc && sc.setBg) sc.setBg(n); markBg(); }
+$('bgs-done').onclick = () => $('bgsheet').classList.add('hidden');
+
+/* ==========================================================================
+   DOM：答題流程
+   ========================================================================== */
+let Q = { route: 0, q: 0, trap: 0, locked: false };
+const quizCat = () => game && game.scene.getScene('QuizScene');
+
+function startRoute(i){ Q = { route: i, q: 0, trap: 0, locked: false }; showMode('quiz'); renderQuestion(); }
+$('q-back').onclick = () => showMode('hub');
+
+function renderQuestion(){
+  const r = ROUTES[Q.route], q = r.questions[Q.q];
+  Q.locked = false; Q.trap = 0;
+  $('q-title').textContent = `路線 ${r.id}：${r.title}`;
+  $('q-dots').innerHTML = r.questions.map((_, i) => `<i class="${i < Q.q ? 'on' : i === Q.q ? 'cur' : ''}"></i>`).join('');
+  $('q-no').textContent = `Q${r.id}-${Q.q + 1}`;
+  $('q-text').textContent = q.q;
+  $('q-hint').textContent = '';
+  const box = $('q-options'); box.innerHTML = '';
+  q.options.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'opt'; b.innerHTML = `<b>${'ABCD'[i]}.</b>`; b.appendChild(document.createTextNode(t));
+    b.onclick = () => onPick(i, b);
+    box.appendChild(b);
+  });
+  $('quiz').scrollTop = 0;
+  // 預先載入下一張回憶照片
+  const nx = r.questions[Q.q + 1]; if(nx){ const im = new Image(); im.src = assetUrl(nx.photoUrl); }
+  const cur = new Image(); cur.src = assetUrl(q.photoUrl);
+}
+
+function shakeBtn(b){ b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 520); }
+
+function onPick(idx, btn){
+  if(Q.locked) return;
+  const r = ROUTES[Q.route], q = r.questions[Q.q], sc = quizCat();
+
+  // ★ 路線四 Q4-4 特殊陷阱：選 D「海扁他」
+  if(q.trapIndex === idx){
+    Q.trap++; shakeBtn(btn); sc && sc.react('hurt');
+    if(Q.trap >= 3){ Q.locked = true; setTimeout(() => $('badend').classList.remove('hidden'), 700); return; }
+    Q.locked = true; setTimeout(() => { Q.locked = false; }, 600);
+    $('q-hint').textContent = '🥺';
+    setTimeout(() => showDialog(TRAP_MSGS[Q.trap - 1]), 450);
+    return;
+  }
+  if(q.answers.includes(idx)){
+    // ★ 選對：貓咪 jump + 拍立得回憶卡
+    Q.locked = true; btn.classList.add('right'); $('q-hint').textContent = '答對了！💖';
+    sc && sc.react('jump');
+    if(sc){ const c = sc.getCenter(); smallBurst(c.x, c.y); }
+    setTimeout(() => openPolaroid(q), 950);
+  } else {
+    // ★ 選錯：選項搖晃 + 貓咪 hurt 1 秒回 idle
+    Q.locked = true; shakeBtn(btn); btn.classList.add('wrong'); btn.disabled = true;
+    $('q-hint').textContent = '再想想看喔～';
+    sc && sc.react('hurt');
+    setTimeout(() => { Q.locked = false; }, 1000);
+  }
+}
+
+function openPolaroid(q){
+  const ph = $('pol-photo'), img = $('pol-img');
+  ph.classList.remove('nophoto');
+  $('pol-fb-name').textContent = q.photoUrl;                 // ★換圖★ 找不到照片時顯示預設溫馨色塊 + 檔名提示
+  img.onerror = () => ph.classList.add('nophoto');
+  img.onload = () => ph.classList.remove('nophoto');
+  img.src = assetUrl(q.photoUrl);
+  $('pol-text').textContent = q.explain;
+  const last = Q.q >= ROUTES[Q.route].questions.length - 1;
+  $('pol-next').textContent = last ? '完成路線 ✨' : '下一題 →';
+  $('m-polaroid').classList.remove('hidden');
+  $('pol-next').onclick = () => {
+    $('m-polaroid').classList.add('hidden');
+    if(!last){ Q.q++; renderQuestion(); } else completeRoute();
+  };
+}
+
+function completeRoute(){
+  const i = Q.route; save.cleared[i] = true; persist();
+  $('frag-word').textContent = `「${ROUTES[i].fragment}」`;
+  $('m-frag').classList.remove('hidden');
+  if(typeof confetti === 'function') confetti({ particleCount: 90, spread: 80, origin:{ y:.55 }, zIndex: 300 });
+  $('frag-ok').onclick = () => { $('m-frag').classList.add('hidden'); showMode('hub', { flip: i }); };
+}
+
+// Bad End：重新挑戰 → 回到 Q4-4 重新作答
+$('badend-retry').onclick = () => { $('badend').classList.add('hidden'); Q.trap = 0; renderQuestion(); };
+
+/* ==========================================================================
+   啟動
+   ========================================================================== */
+window.addEventListener('load', () => {
+  if(typeof Phaser === 'undefined'){
+    $('loading').innerHTML = '<div style="padding:24px;text-align:center">⚠️ Phaser 載入失敗，請確認網路連線後重新整理。</div>';
+    return;
+  }
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game-root',
+    transparent: true,
+    pixelArt: true,                                   // 像素風：關閉平滑，貓咪不會變模糊
+    scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
+    input: { activePointers: 3, touch: { capture: true } },
+    scene: [BootScene, HubScene, QuizScene, RoomScene],
+  });
+  window.game = game;
+});
+document.addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body>
+</html>
